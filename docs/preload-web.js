@@ -1,6 +1,12 @@
 (function() {
-  // Force clear all old data
-  try { var keys = Object.keys(localStorage); for (var i = 0; i < keys.length; i++) { if (keys[i].startsWith('fund_')) localStorage.removeItem(keys[i]); } } catch(_) {}
+  // One-time data migration for old formats
+  try {
+    if (!localStorage.getItem('fund_v4')) {
+      var keys = Object.keys(localStorage);
+      for (var i = 0; i < keys.length; i++) { if (keys[i].startsWith('fund_')) localStorage.removeItem(keys[i]); }
+      localStorage.setItem('fund_v4', '1');
+    }
+  } catch(_) {}
 
   const BACKEND = 'https://features-wife-london-applicant.trycloudflare.com';
 
