@@ -1,0 +1,54 @@
+{
+  "name": "fund-monitor",
+  "version": "1.0.0",
+  "description": "基金监测软件 - 追踪小红书博主基金操作建议",
+  "main": "main.js",
+  "scripts": {
+    "start": "webpack --mode development && electron .",
+    "dev": "webpack --mode development --watch &  sleep 2 && electron .",
+    "build": "webpack --mode production",
+    "pack": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.fundmonitor.app",
+    "productName": "基金监测",
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.png"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "dist/**/*",
+      "src/index.html"
+    ]
+  },
+  "keywords": [
+    "fund",
+    "xiaohongshu",
+    "monitor"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.16.1",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "sql.js": "^1.14.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/preset-env": "^7.29.5",
+    "@babel/preset-react": "^7.28.5",
+    "babel-loader": "^10.1.1",
+    "concurrently": "^9.2.1",
+    "css-loader": "^7.1.4",
+    "electron": "^33.4.0",
+    "express": "^5.2.1",
+    "localtunnel": "^2.0.2",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.106.2",
+    "webpack-cli": "^7.0.2"
+  }
+}
