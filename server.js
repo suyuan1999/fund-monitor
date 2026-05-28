@@ -502,12 +502,14 @@ app.post('/api/pipeline/run', async (req, res) => {
   res.json(pipelineStatus);
 });
 
-const PORT = 3456;
+const PORT = process.env.PORT || 3456;
 db.initDatabase().then(() => {
   app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
     startScheduler();
-    const { exec } = require('child_process');
-    exec(`open http://localhost:${PORT}`);
+    if (!process.env.RENDER) {
+      const { exec } = require('child_process');
+      exec(`open http://localhost:${PORT}`);
+    }
   });
 });

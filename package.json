@@ -7,7 +7,10 @@
     "start": "webpack --mode development && electron .",
     "dev": "webpack --mode development --watch &  sleep 2 && electron .",
     "build": "webpack --mode production",
-    "pack": "electron-builder --mac"
+    "pack": "electron-builder --mac",
+    "server": "node server.js",
+    "render-build": "npm install && npx webpack --mode production",
+    "render-start": "node server.js"
   },
   "build": {
     "appId": "com.fundmonitor.app",
