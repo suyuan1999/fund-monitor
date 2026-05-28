@@ -121,7 +121,11 @@ app.post('/api/blogger/parseScreenshot', async (req, res) => {
 // ===== Note API =====
 app.post('/api/note/fetch/:bloggerId', async (req, res) => {
   const bloggerId = Number(req.params.bloggerId);
-  const blogger = db.getBloggers().find(b => b.id === bloggerId);
+  let blogger = db.getBloggers().find(b => b.id === bloggerId);
+  // If blogger not in backend DB, use url from frontend localStorage
+  if (!blogger && req.body?.url) {
+    blogger = { id: bloggerId, xhs_url: req.body.url, nickname: '未知' };
+  }
   if (!blogger) return res.json({ success: false, error: 'Not found' });
   try {
     const cookie = db.getSetting('xhs_cookie') || '';
