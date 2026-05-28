@@ -1,7 +1,7 @@
 // Polyfill window.api for browser mode
 // This mirrors the Electron preload.js API using fetch()
 (function() {
-  const BASE = window.location.origin;
+  const BASE = 'https://fund-monitor-wpzj.vercel.app';
 
   async function req(method, path, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
