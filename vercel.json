@@ -1,9 +1,4 @@
 {
-  "version": 2,
-  "buildCommand": "npx webpack --mode production",
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index" },
-    { "src": "/bundle.js", "dest": "/dist/bundle.js" },
-    { "src": "/(.*)", "dest": "/api/index" }
-  ]
+  "buildCommand": "npx webpack --mode production && mkdir -p public && cp dist/bundle.js public/ && cp src/index.html public/ && cp src/preload-web.js public/",
+  "outputDirectory": "public"
 }
