@@ -519,6 +519,23 @@ app.post('/api/pipeline/run', async (req, res) => {
   res.json(pipelineStatus);
 });
 
+// XHS Proxy endpoint: fetches XHS URLs and returns HTML/text
+app.get('/api/xhs-proxy', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).json({ error: 'Missing url' });
+  try {
+    const axios = require('axios');
+    const r = await axios.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15', 'Accept': 'text/html', 'Accept-Language': 'zh-CN,zh;q=0.9' },
+      maxRedirects: 5,
+      timeout: 15000
+    });
+    res.send(r.data);
+  } catch(e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
 const PORT = process.env.PORT || 3456;
 db.initDatabase().then(() => {
   app.listen(PORT, () => {
