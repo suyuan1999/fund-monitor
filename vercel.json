@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "buildCommand": "npx webpack --mode production",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
+  "builds": [
+    { "src": "server.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "server.js" },
+    { "src": "/dist/(.*)", "dest": "/dist/$1" },
+    { "src": "/(.*)", "dest": "server.js" }
+  ]
+}
