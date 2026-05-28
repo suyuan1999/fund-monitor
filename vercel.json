@@ -1,7 +1,9 @@
 {
+  "version": 2,
   "buildCommand": "npx webpack --mode production",
-  "installCommand": "npm install",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index" }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/index" },
+    { "src": "/bundle.js", "dest": "/dist/bundle.js" },
+    { "src": "/(.*)", "dest": "/api/index" }
   ]
 }

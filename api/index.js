@@ -1,33 +1,82 @@
-const express = require('express');
-const path = require('path');
 const fs = require('fs');
-const app = express();
-app.use(express.json({ limit: '10mb' }));
-
+const path = require('path');
 const DB = '/tmp/fund-db.json';
-function db() { try { return JSON.parse(fs.readFileSync(DB,'utf-8')); } catch(_) { return { bloggers:[], notes:[], analysis:[], settings:{ ai_enabled:'true', push_enabled:'true', auto_fetch_enabled:'true', auto_fetch_time:'14:30', sct_sendkey:'', ai_api_key:'', ai_provider:'deepseek', xhs_cookie:'' } }; } }
+
+function db() { try { return JSON.parse(fs.readFileSync(DB,'utf-8')); } catch(_) { return { bloggers:[], notes:[], settings:{ ai_enabled:'true', push_enabled:'true', auto_fetch_enabled:'true', auto_fetch_time:'14:30', sct_sendkey:'', ai_api_key:'', ai_provider:'deepseek', xhs_cookie:'' } }; } }
 function save(d) { fs.writeFileSync(DB, JSON.stringify(d)); }
 
-app.get('/api/blogger/list', (_,r) => { const d=db(); r.json(d.bloggers); });
-app.post('/api/blogger/add', (q,r) => { const {url}=q.body,d=db(); const id=Date.now(); d.bloggers.push({id,nickname:'博主-'+String(id).slice(-4),xhs_url:url,tags:'[]',note_count:0,created_at:new Date().toISOString()}); save(d); r.json({success:true,blogger:d.bloggers[d.bloggers.length-1]}); });
-app.delete('/api/blogger/:id', (q,r) => { const d=db(); d.bloggers=d.bloggers.filter(b=>b.id!==Number(q.params.id)); d.notes=d.notes.filter(n=>n.blogger_id!==Number(q.params.id)); save(d); r.json({success:true}); });
-app.get('/api/note/today', (_,r) => { const d=db(),t=new Date().toISOString().slice(0,10); r.json((d.notes||[]).filter(n=>n.note_date===t).map(n=>({...n,blogger_nickname:(d.bloggers.find(b=>b.id===n.blogger_id)||{}).nickname||'未知'}))); });
-app.post('/api/note/addManual', (q,r) => { const d=db(); d.notes.push({id:Date.now(),blogger_id:q.body.bloggerId,content:q.body.content,source:'manual',note_url:'',note_date:new Date().toISOString().slice(0,10),fetched_at:new Date().toISOString()}); save(d); r.json({success:true}); });
-app.get('/api/settings/all', (_,r) => { r.json(db().settings); });
-app.get('/api/setting/:key', (q,r) => { r.json({value:db().settings[q.params.key]||''}); });
-app.put('/api/setting/:key', (q,r) => { const d=db(); d.settings[q.params.key]=String(q.body.value||''); save(d); r.json({success:true}); });
-app.get('/api/analysis/get', (q,r) => { r.json(null); });
-app.post('/api/analysis/run', (_,r) => { r.json({success:false,error:'云端不支持'}); });
-app.post('/api/analysis/estimateCost', (_,r) => { r.json({cost:'约 0'}); });
-app.post('/api/pipeline/status', (_,r) => { r.json({step:'idle',autoEnabled:true}); });
-app.post('/api/pipeline/run', (_,r) => { r.json({success:false,error:'云端不支持'}); });
-app.post('/api/pipeline/fetch', (_,r) => { r.json({success:false,error:'云端不支持'}); });
-app.post('/api/push/send', (_,r) => { r.json({success:false,error:'云端不支持'}); });
-app.post('/api/note/fetch/:id', (_,r) => { r.json({success:false,error:'云端不支持，请用本地版'}); });
-app.post('/api/note/fetchAll', (_,r) => { r.json({success:false,error:'云端不支持'}); });
+// Serve static files
+function serveStatic(req, res) {
+  const url = req.url === '/' ? '/index.html' : req.url;
+  const srcPath = path.join(__dirname, '..', 'src', url);
+  const distPath = path.join(__dirname, '..', 'dist', url);
+  for (const p of [srcPath, distPath]) {
+    try { const c = fs.readFileSync(p); res.writeHead(200, { 'Content-Type': p.endsWith('.js') ? 'application/javascript' : p.endsWith('.css') ? 'text/css' : 'text/html' }); res.end(c); return true; } catch(_) {}
+  }
+  return false;
+}
 
-app.use(express.static(path.join(__dirname,'..','dist')));
-app.use(express.static(path.join(__dirname,'..','src')));
-app.get('*', (_,r) => r.sendFile(path.join(__dirname,'..','src','index.html')));
+function json(res, data, code=200) { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); }
+function body(req) { return new Promise((resolve) => { let d=''; req.on('data',c=>d+=c); req.on('end',()=>{ try{resolve(JSON.parse(d))}catch(_){resolve({})} }); }); }
 
-module.exports = app;
+module.exports = async function handler(req, res) {
+  const url = req.url.split('?')[0];
+
+  // API routes
+  if (url === '/api/blogger/list') {
+    return json(res, db().bloggers);
+  }
+  if (url === '/api/blogger/add' && req.method === 'POST') {
+    const b = await body(req);
+    const d = db();
+    const id = Date.now();
+    const blogger = { id, nickname: '博主-'+String(id).slice(-4), xhs_url: b.url||'', tags: '[]', note_count: 0, created_at: new Date().toISOString() };
+    d.bloggers.push(blogger);
+    save(d);
+    return json(res, { success: true, blogger });
+  }
+  if (url.startsWith('/api/blogger/') && req.method === 'DELETE') {
+    const id = Number(url.split('/').pop());
+    const d = db();
+    d.bloggers = d.bloggers.filter(x => x.id !== id);
+    d.notes = (d.notes||[]).filter(x => x.blogger_id !== id);
+    save(d);
+    return json(res, { success: true });
+  }
+  if (url === '/api/note/today') {
+    const d = db();
+    const t = new Date().toISOString().slice(0,10);
+    return json(res, (d.notes||[]).filter(n=>n.note_date===t).map(n=>({...n, blogger_nickname: (d.bloggers.find(x=>x.id===n.blogger_id)||{}).nickname||'未知'})));
+  }
+  if (url === '/api/settings/all') {
+    return json(res, db().settings);
+  }
+  if (url.startsWith('/api/setting/') && req.method === 'GET') {
+    return json(res, { value: db().settings[url.split('/').pop()] || '' });
+  }
+  if (url.startsWith('/api/setting/') && req.method === 'PUT') {
+    const b = await body(req);
+    const d = db();
+    d.settings[url.split('/').pop()] = String(b.value||'');
+    save(d);
+    return json(res, { success: true });
+  }
+
+  // Catch-all API: return mock success
+  if (url.startsWith('/api/')) {
+    return json(res, { success: false, error: '云端不支持此功能，请用本地版' });
+  }
+
+  // Static files
+  if (serveStatic(req, res)) return;
+
+  // Fallback to index.html
+  try {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.html'), 'utf-8');
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(html);
+  } catch(_) {
+    res.writeHead(404);
+    res.end('404');
+  }
+};
