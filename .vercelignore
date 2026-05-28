@@ -1,6 +1,13 @@
 docs/
 dist/
-src/
+src/components/
+src/App.css
+src/App.jsx
+src/index.jsx
+src/index.html
+src/index-electron.html
+src/api.js
+src/preload-web.js
 node_modules/
 assets/
 dev-log/
