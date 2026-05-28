@@ -1,0 +1,21 @@
+<!DOCTYPE html><html><body>
+<h3>API Test</h3>
+<button onclick="test()">Test Add Blogger</button>
+<pre id="result"></pre>
+<script>
+async function test() {
+  document.getElementById('result').textContent = 'Testing...';
+  try {
+    var r = await fetch('https://features-wife-london-applicant.trycloudflare.com/api/blogger/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://xhslink.com/m/3IH6IoSaEr4' })
+    });
+    var d = await r.json();
+    document.getElementById('result').textContent = JSON.stringify(d, null, 2);
+  } catch(e) {
+    document.getElementById('result').textContent = 'ERROR: ' + e.message;
+  }
+}
+</script>
+</body></html>
