@@ -1,4 +1,17 @@
 (function() {
+  // Clear old corrupted data (previous versions may have incompatible format)
+  try {
+    var version = localStorage.getItem('fund_version');
+    if (version !== '2') {
+      // Remove ALL old data
+      var keys = Object.keys(localStorage);
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i].startsWith('fund_')) localStorage.removeItem(keys[i]);
+      }
+      localStorage.setItem('fund_version', '2');
+    }
+  } catch(_) {}
+
   const CORS = 'https://corsproxy.io/?';
   function load(k,d){try{return JSON.parse(localStorage.getItem('fund_'+k))}catch(_){return d}}
   function save(k,d){localStorage.setItem('fund_'+k,JSON.stringify(d))}
