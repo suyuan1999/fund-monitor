@@ -148,6 +148,7 @@ app.post('/api/note/fetch/:bloggerId', async (req, res) => {
             fetched: notesResult.contents.length,
             total: notesResult.totalFetched,
             days,
+            contents: notesResult.contents,
           });
         }
         return res.json({ success: false, error: notesResult.error, needManual: true });
@@ -223,13 +224,22 @@ app.get('/api/note/today', (req, res) => {
 // ===== Analysis API =====
 app.post('/api/analysis/run', async (req, res) => {
   try {
-    let notes = db.getTodayNotes();
-    if (!notes.length) return res.json({ success: false, error: 'No notes' });
+    let notes;
 
-    // Support selective analysis: only include selected note IDs
-    const selectedIds = req.body?.noteIds;
-    if (selectedIds && selectedIds.length > 0) {
-      notes = notes.filter((n) => selectedIds.includes(n.id));
+    // Accept content directly (from GitHub Pages frontend with localStorage)
+    if (req.body?.contents && req.body.contents.length > 0) {
+      notes = req.body.contents.map(c => ({
+        content: c.content || '',
+        blogger_nickname: c.blogger_nickname || c.nickname || '未知',
+      }));
+    } else {
+      // Use backend database notes
+      notes = db.getTodayNotes();
+      if (!notes.length) return res.json({ success: false, error: 'No notes' });
+      const selectedIds = req.body?.noteIds;
+      if (selectedIds && selectedIds.length > 0) {
+        notes = notes.filter((n) => selectedIds.includes(n.id));
+      }
     }
 
     if (!notes.length) return res.json({ success: false, error: '未选择任何内容' });

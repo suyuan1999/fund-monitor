@@ -56,22 +56,25 @@
       if (!blogger) return { success: false, error: 'Not found' };
 
       const result = await backendReq('POST', '/api/note/fetch/' + bloggerId, { days: days || 1, url: blogger.xhs_url });
-      if (result.success) {
+      if (result.success && result.contents && result.contents.length > 0) {
         const notes = getNotes();
-        const today = new Date().toISOString().slice(0, 10);
-        // Store fetched notes locally
-        if (result.fetched > 0) {
-          // Backend stored them, fetch them back
-          const backendNotes = await backendReq('GET', '/api/note/today');
-          if (Array.isArray(backendNotes)) {
-            for (const n of backendNotes) {
-              if (!notes.find(ex => ex.note_url === n.note_url && ex.blogger_id === n.blogger_id)) {
-                notes.push({ ...n, _localId: Date.now() + Math.random() });
-              }
-            }
-            save('notes', notes);
+        for (const c of result.contents) {
+          const exists = notes.find(n => n.note_url === c.noteUrl && n.blogger_id === bloggerId);
+          if (!exists) {
+            notes.push({
+              id: Date.now() + Math.random(),
+              blogger_id: bloggerId,
+              content: c.content,
+              source: 'auto',
+              note_url: c.noteUrl || '',
+              note_date: c.noteDate || new Date().toISOString().slice(0,10),
+              fetched_at: new Date().toISOString(),
+              blogger_nickname: blogger.nickname
+            });
           }
         }
+        save('notes', notes);
+        return { success: true, fetched: result.contents.length };
       }
       return result;
     },
@@ -107,9 +110,17 @@
       }));
     },
 
-    // Analysis (backend proxy)
+    // Analysis (send localStorage content to backend)
     runAnalysis: async (noteIds) => {
-      return backendReq('POST', '/api/analysis/run', { noteIds: noteIds || [] });
+      const notes = getNotes();
+      const t = new Date().toISOString().slice(0,10);
+      const selected = notes.filter(n => n.note_date === t && (!noteIds || noteIds.length === 0 || noteIds.includes(n.id)));
+      const contents = selected.map(n => ({
+        content: n.content || '',
+        blogger_nickname: n.blogger_nickname || '未知'
+      }));
+      if (!contents.length) return { success: false, error: '今日没有内容' };
+      return backendReq('POST', '/api/analysis/run', { contents });
     },
     getAnalysis: async (date) => {
       const r = await backendReq('GET', '/api/analysis/get' + (date ? '?date=' + date : ''));
