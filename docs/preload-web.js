@@ -13,7 +13,7 @@
   } catch(_) {}
 
   const PROXY = 'https://features-wife-london-applicant.trycloudflare.com/api/xhs-proxy?url=';
-  function load(k,d){try{return JSON.parse(localStorage.getItem('fund_'+k))}catch(_){return d}}
+  function load(k,d){try{var v=JSON.parse(localStorage.getItem('fund_'+k));return v!=null?v:d}catch(_){return d}}
   function save(k,d){localStorage.setItem('fund_'+k,JSON.stringify(d))}
   function S(){return load('settings',{ai_enabled:'true',push_enabled:'true',auto_fetch_enabled:'true',auto_fetch_time:'14:30',sct_sendkey:'',ai_api_key:'',ai_provider:'deepseek',xhs_cookie:''})}
   function B(){return load('bloggers',[])}
