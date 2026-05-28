@@ -2,7 +2,7 @@
   var BACKEND = 'https://features-wife-london-applicant.trycloudflare.com';
 
   // One-time data migration
-  try { if (!localStorage.getItem('fund_v5')) { var keys = Object.keys(localStorage); for (var i = 0; i < keys.length; i++) { if (keys[i].startsWith('fund_')) localStorage.removeItem(keys[i]); } localStorage.setItem('fund_v5', '1'); } } catch(_) {}
+  try { if (!localStorage.getItem('fund_v6')) { var keys = Object.keys(localStorage); for (var i = 0; i < keys.length; i++) { if (keys[i].startsWith('fund_')) localStorage.removeItem(keys[i]); } localStorage.setItem('fund_v6', '1'); } } catch(_) {}
 
   function load(k, d) { try { var v = JSON.parse(localStorage.getItem('fund_' + k)); return (v && typeof v === 'object') ? v : d; } catch(_) { return d; } }
   function save(k, v) { localStorage.setItem('fund_' + k, JSON.stringify(v)); }
