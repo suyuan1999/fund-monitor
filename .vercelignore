@@ -1,0 +1,10 @@
+docs/
+dist/
+src/
+node_modules/
+assets/
+dev-log/
+*.md
+main.js
+preload.js
+webpack.config.js
