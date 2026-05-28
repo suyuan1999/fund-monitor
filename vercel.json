@@ -1,3 +1,6 @@
 {
-  "buildCommand": "echo ok"
+  "buildCommand": "echo ok",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" }
+  ]
 }
