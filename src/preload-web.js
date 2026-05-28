@@ -1,7 +1,7 @@
 // Polyfill window.api for browser mode
 // This mirrors the Electron preload.js API using fetch()
 (function() {
-  const BASE = 'http://localhost:3456';
+  const BASE = window.location.origin;
 
   async function req(method, path, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
