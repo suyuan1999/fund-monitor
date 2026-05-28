@@ -2,7 +2,7 @@
   // Clear old data
   try { if (localStorage.getItem('fund_version') !== 'v3') { var keys = Object.keys(localStorage); for (var i = 0; i < keys.length; i++) { if (keys[i].startsWith('fund_')) localStorage.removeItem(keys[i]); } localStorage.setItem('fund_version', 'v3'); } } catch(_) {}
 
-  const PROXY = 'https://features-wife-london-applicant.trycloudflare.com/api/xhs-proxy?url=';
+  const BACKEND = 'https://features-wife-london-applicant.trycloudflare.com';
 
   function load(k, d) { try { var v = JSON.parse(localStorage.getItem('fund_' + k) || 'null'); return (v && typeof v === 'object') ? v : d; } catch(_) { return d; } }
   function save(k, v) { localStorage.setItem('fund_' + k, JSON.stringify(v)); }
@@ -10,53 +10,19 @@
   function B() { return load('bloggers', []); }
   function N() { return load('notes', []); }
 
-  // Fetch XHS page via proxy
-  async function fetchXHS(url) {
-    try { var r = await fetch(PROXY + encodeURIComponent(url)); return r.text(); } catch(_) { return null; }
+  // Backend API call
+  async function api(method, path, body) {
+    try {
+      var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      var r = await fetch(BACKEND + path, opts);
+      return r.json();
+    } catch(_) { return { success: false, error: '后端连接失败' }; }
   }
 
-  // Parse XHS URL to determine type
-  function parseXHSLink(url) {
-    var u = url.trim();
-    // xhslink short links (with or without path prefix)
-    var m = u.match(/xhslink\.com\/(?:m\/|a\/)?([A-Za-z0-9]+)/);
-    if (m) return { type: 'shortlink', url: u, id: m[1] };
-    // Note detail pages
-    m = u.match(/xiaohongshu\.com\/(?:explore|discovery\/item)\/([a-f0-9]+)/);
-    if (m) return { type: 'note', url: u, id: m[1] };
-    // Profile pages
-    m = u.match(/xiaohongshu\.com\/user\/profile\/([a-f0-9]+)/);
-    if (m) return { type: 'profile', url: u, id: m[1] };
-    // Unknown - try as-is
-    return { type: 'unknown', url: u, id: null };
-  }
-
-  // Resolve any XHS link to get nickname
+  // Resolve XHS link via backend
   async function xhsResolve(url) {
-    var parsed = parseXHSLink(url);
-    if (parsed.type === 'unknown') return { success: false, error: '不支持的链接格式，请使用小红书分享链接' };
-
-    var html = await fetchXHS(parsed.url);
-    if (!html) return { success: false, error: '网络请求失败，请检查网络后重试' };
-
-    // Extract nickname from HTML
-    var nick = null;
-    var profileUrl = parsed.url;
-
-    // Try JSON patterns
-    var m = html.match(/"nickname"\s*:\s*"([^"]+)"/);
-    if (!m) m = html.match(/"nickName"\s*:\s*"([^"]+)"/);
-    if (!m) m = html.match(/nickname":"([^"]+)"/);
-    if (!m) m = html.match(/<title>([^<]+)的个人主页[^<]*<\/title>/);
-    if (!m) m = html.match(/<title>([^<]+)[^<]*<\/title>/);
-    if (!m) m = html.match(/>([^<]{2,20})<\/div>/); // Last resort
-    nick = m ? m[1].trim() : null;
-
-    // Extract profile URL from redirect
-    var pm = html.match(/"\/user\/profile\/([a-f0-9]+)"/);
-    if (pm) profileUrl = 'https://www.xiaohongshu.com/user/profile/' + pm[1];
-
-    return { success: true, nickname: nick || '未知博主', profileUrl: profileUrl };
+    return api('POST', '/api/blogger/add', { url: url });
   }
 
   // AI Analysis
@@ -129,73 +95,23 @@
       var bs = B(); if (!Array.isArray(bs)) bs = [];
       var blogger = bs.find(function(b) { return b.id === bloggerId; });
       if (!blogger) return { success: false, error: '博主不存在' };
-      var s = S();
-      if (!s.xhs_cookie) return { success: false, error: '请先在设置中配置小红书 Cookie', needManual: true };
 
-      // Resolve profile URL
-      var pu = blogger.xhs_url;
-      if (pu.indexOf('xhslink.com') >= 0) {
-        var resolved = await xhsResolve(pu);
-        if (!resolved.success) return resolved;
-        pu = resolved.profileUrl || pu;
-      }
-
-      // Fetch profile page to get note IDs
-      var profileHtml = null;
-      if (pu.indexOf('user/profile') >= 0) {
-        profileHtml = await fetchXHS(pu);
-      } else {
-        // Try to construct profile URL from user ID
-        var uidMatch = pu.match(/user\/profile\/([a-f0-9]+)/);
-        if (uidMatch) profileHtml = await fetchXHS('https://www.xiaohongshu.com/user/profile/' + uidMatch[1]);
-      }
-      if (!profileHtml) return { success: false, error: '无法获取博主主页' };
-
-      // Extract note IDs
-      var nidMatches = profileHtml.match(/"noteId"\s*:\s*"([a-f0-9]{24})"/g);
-      if (!nidMatches) return { success: false, error: '未找到笔记' };
-      var nids = [];
-      for (var i = 0; i < nidMatches.length; i++) {
-        var mid = nidMatches[i].match(/"([a-f0-9]{24})"/);
-        if (mid) nids.push(mid[1]);
-      }
-
-      var ns = N(); if (!Array.isArray(ns)) ns = [];
-      var today = new Date().toISOString().slice(0, 10);
-      var f = 0;
-
-      for (var j = 0; j < nids.length && f < 3; j++) {
-        var noteHtml = await fetchXHS('https://www.xiaohongshu.com/explore/' + nids[j]);
-        if (!noteHtml) continue;
-        // Extract note content
-        var sm = noteHtml.match(/window\.__INITIAL_STATE__\s*=\s*({[^<]+?})\s*<\/script>/);
-        var title = '', content = '', time = 0;
-        if (sm) {
-          try {
-            var state = JSON.parse(sm[1].replace(/undefined/g, 'null'));
-            var nm = state && state.note && state.note.noteDetailMap;
-            if (nm) {
-              var nk = Object.keys(nm)[0];
-              var note = nm[nk] && nm[nk].note;
-              if (note) { title = note.title || ''; content = note.desc || ''; time = note.time || 0; }
-            }
-          } catch(_) {}
+      // Use backend to fetch notes
+      var result = await api('POST', '/api/note/fetch/' + bloggerId, { days: 1, url: blogger.xhs_url });
+      if (result.success && result.contents) {
+        var ns = N(); if (!Array.isArray(ns)) ns = [];
+        for (var i = 0; i < result.contents.length; i++) {
+          var c = result.contents[i];
+          if (!c.content) continue;
+          var exists = ns.find(function(n) { return n.note_url === c.noteUrl && n.blogger_id === bloggerId; });
+          if (!exists) {
+            ns.push({ id: Date.now() + Math.random(), blogger_id: bloggerId, content: c.content, source: 'auto', note_url: c.noteUrl || '', note_date: c.noteDate || new Date().toISOString().slice(0, 10), fetched_at: new Date().toISOString(), blogger_nickname: blogger.nickname });
+          }
         }
-        if (!content) {
-          var dm = noteHtml.match(/<meta[^>]+name="description"[^>]+content="([^"]+)"/i);
-          if (dm) content = dm[1];
-        }
-        if (!content) continue;
-
-        var noteUrl = 'https://www.xiaohongshu.com/explore/' + nids[j];
-        var exists = ns.find(function(n) { return n.note_url === noteUrl && n.blogger_id === bloggerId; });
-        if (!exists) {
-          ns.push({ id: Date.now() + Math.random(), blogger_id: bloggerId, content: title ? title + '\n' + content : content, source: 'auto', note_url: noteUrl, note_date: time > 0 ? new Date(time).toISOString().slice(0, 10) : today, fetched_at: new Date().toISOString(), blogger_nickname: blogger.nickname });
-          f++;
-        }
+        save('notes', ns);
+        return { success: true, fetched: result.contents.length };
       }
-      save('notes', ns);
-      return { success: true, fetched: f };
+      return result;
     },
     fetchAllLatest: async function() {
       var bs = B(); if (!Array.isArray(bs)) bs = [];
@@ -224,22 +140,14 @@
         return n;
       }));
     },
-    runAnalysis: async function(nids) {
-      var t = new Date().toISOString().slice(0, 10);
-      var ns = N(); if (!Array.isArray(ns)) ns = [];
-      var sel = ns.filter(function(n) { return n.note_date === t && (!nids || !nids.length || nids.indexOf(n.id) >= 0); });
-      if (!sel.length) return { success: false, error: '今日没有内容' };
-      var bs = B(); if (!Array.isArray(bs)) bs = [];
-      sel = sel.map(function(n) { var blogger = bs.find(function(b) { return b.id === n.blogger_id; }); n.blogger_nickname = (blogger || {}).nickname || '未知'; return n; });
-      return aiAnalyze(sel);
-    },
-    getAnalysis: function() { return Promise.resolve(null); },
-    estimateCost: function() { return Promise.resolve({ cost: '约 ¥0.01-0.03' }); },
-    pushToWechat: function() { return sendPush(); },
-    pipelineStatus: function() { return Promise.resolve({ step: 'idle', autoEnabled: true }); },
-    pipelineRun: function() { return sendPush().then(function(r) { r.step = r.success ? 'done' : 'failed'; return r; }); },
-    pipelineFetch: function() { return Promise.resolve({ success: false, error: '云端不支持' }); },
-    uploadScreenshot: function() { return Promise.resolve({ success: false, error: '云端不支持' }); },
+    runAnalysis: function(nids) { return api('POST', '/api/analysis/run', { noteIds: nids || [] }); },
+    getAnalysis: function(d) { return api('GET', '/api/analysis/get' + (d ? '?date=' + d : '')); },
+    estimateCost: function() { return api('GET', '/api/analysis/estimateCost'); },
+    pushToWechat: function() { return api('POST', '/api/push/send'); },
+    pipelineStatus: function() { return api('GET', '/api/pipeline/status'); },
+    pipelineRun: function() { return api('POST', '/api/pipeline/run'); },
+    pipelineFetch: function() { return api('POST', '/api/pipeline/fetch'); },
+    uploadScreenshot: function(bid, img) { return api('POST', '/api/note/uploadScreenshot', { bloggerId: bid, imageBase64: img }); },
     getSetting: function(key) { return Promise.resolve(S()[key] || ''); },
     setSetting: function(key, value) {
       var s = S();
