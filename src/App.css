@@ -486,6 +486,8 @@
 .card-nickname {
   font-size: 17px;
   font-weight: 700;
+  word-break: break-all;
+  overflow-wrap: break-word;
   color: var(--text-main);
   margin-bottom: 6px;
   margin-top: 4px;
