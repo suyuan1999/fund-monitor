@@ -1,49 +1,144 @@
-// Polyfill window.api for browser mode
-// This mirrors the Electron preload.js API using fetch()
+// Standalone mode: each user has their own data in localStorage
+// Backend is only used for XHS crawling, AI analysis, and push
 (function() {
-  const BASE = 'https://features-wife-london-applicant.trycloudflare.com';
+  const BACKEND = 'https://features-wife-london-applicant.trycloudflare.com';
 
-  async function req(method, path, body) {
+  // localStorage helpers
+  function load(key, def) { try { return JSON.parse(localStorage.getItem('fund_'+key)); } catch(_) { return def; } }
+  function save(key, data) { localStorage.setItem('fund_'+key, JSON.stringify(data)); }
+
+  // Default settings
+  function getSettings() { return load('settings', { ai_enabled:'true', push_enabled:'true', auto_fetch_enabled:'true', auto_fetch_time:'14:30', sct_sendkey:'', ai_api_key:'', ai_provider:'deepseek', xhs_cookie:'' }); }
+  function getBloggers() { return load('bloggers', []); }
+  function getNotes() { return load('notes', []); }
+
+  async function backendReq(method, path, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(BASE + path, opts);
-    return res.json();
+    try { const r = await fetch(BACKEND + path, opts); return r.json(); } catch(_) { return { success: false, error: '后端不可用' }; }
   }
 
   window.api = {
-    // Blogger
-    addBlogger: (url) => req('POST', '/api/blogger/add', { url }),
-    getBloggers: () => req('GET', '/api/blogger/list').then(r => Array.isArray(r) ? r : []),
-    updateBlogger: (id, data) => req('PUT', '/api/blogger/' + id, data),
-    deleteBlogger: (id) => req('DELETE', '/api/blogger/' + id),
-    searchBloggers: (kw) => req('GET', '/api/blogger/list?search=' + encodeURIComponent(kw)).then(r => Array.isArray(r) ? r : []),
+    // Blogger (localStorage)
+    addBlogger: async (url) => {
+      // Try backend parsing first
+      const result = await backendReq('POST', '/api/blogger/add', { url });
+      if (result.success) {
+        const bloggers = getBloggers();
+        bloggers.push(result.blogger);
+        save('bloggers', bloggers);
+      }
+      return result;
+    },
+    getBloggers: () => getBloggers(),
+    updateBlogger: (id, data) => {
+      const bloggers = getBloggers();
+      const idx = bloggers.findIndex(b => b.id === id);
+      if (idx >= 0) { Object.assign(bloggers[idx], data); save('bloggers', bloggers); }
+      return bloggers[idx] || null;
+    },
+    deleteBlogger: (id) => {
+      const bloggers = getBloggers().filter(b => b.id !== id);
+      const notes = getNotes().filter(n => n.blogger_id !== id);
+      save('bloggers', bloggers);
+      save('notes', notes);
+      return { success: true };
+    },
+    searchBloggers: (kw) => {
+      const q = kw.toLowerCase();
+      return getBloggers().filter(b => b.nickname.toLowerCase().includes(q));
+    },
 
-    // Notes
-    fetchLatest: (bloggerId, days) => req('POST', '/api/note/fetch/' + bloggerId, { days: days || 1 }),
-    fetchAllLatest: (days) => req('POST', '/api/note/fetchAll', { days: days || 1 }),
-    addManualNote: (bloggerId, content) => req('POST', '/api/note/addManual', { bloggerId, content }),
-    getNotes: (bloggerId) => req('GET', '/api/note/list/' + bloggerId).then(r => Array.isArray(r) ? r : []),
-    getTodayNotes: () => req('GET', '/api/note/today').then(r => Array.isArray(r) ? r : []),
+    // Notes (localStorage + backend fetch)
+    fetchLatest: async (bloggerId, days) => {
+      const bloggers = getBloggers();
+      const blogger = bloggers.find(b => b.id === bloggerId);
+      if (!blogger) return { success: false, error: 'Not found' };
 
-    // Analysis
-    runAnalysis: (noteIds) => req('POST', '/api/analysis/run', { noteIds: noteIds || [] }),
-    getAnalysis: (date) => req('GET', '/api/analysis/get' + (date ? '?date=' + date : '')),
-    estimateCost: () => req('GET', '/api/analysis/estimateCost'),
+      const result = await backendReq('POST', '/api/note/fetch/' + bloggerId, { days: days || 1, url: blogger.xhs_url });
+      if (result.success) {
+        const notes = getNotes();
+        const today = new Date().toISOString().slice(0, 10);
+        // Store fetched notes locally
+        if (result.fetched > 0) {
+          // Backend stored them, fetch them back
+          const backendNotes = await backendReq('GET', '/api/note/today');
+          if (Array.isArray(backendNotes)) {
+            for (const n of backendNotes) {
+              if (!notes.find(ex => ex.note_url === n.note_url && ex.blogger_id === n.blogger_id)) {
+                notes.push({ ...n, _localId: Date.now() + Math.random() });
+              }
+            }
+            save('notes', notes);
+          }
+        }
+      }
+      return result;
+    },
+    fetchAllLatest: async (days) => {
+      const results = [];
+      for (const blogger of getBloggers()) {
+        const r = await window.api.fetchLatest(blogger.id, days);
+        results.push({ bloggerId: blogger.id, ...r });
+      }
+      return { success: true, results };
+    },
+    addManualNote: (bloggerId, content) => {
+      const notes = getNotes();
+      notes.push({
+        id: Date.now(),
+        blogger_id: bloggerId,
+        content,
+        source: 'manual',
+        note_url: '',
+        note_date: new Date().toISOString().slice(0, 10),
+        fetched_at: new Date().toISOString(),
+        blogger_nickname: (getBloggers().find(b => b.id === bloggerId) || {}).nickname || '未知'
+      });
+      save('notes', notes);
+      return { success: true };
+    },
+    getNotes: (bloggerId) => getNotes().filter(n => n.blogger_id === bloggerId),
+    getTodayNotes: () => {
+      const t = new Date().toISOString().slice(0, 10);
+      return getNotes().filter(n => n.note_date === t).map(n => ({
+        ...n,
+        blogger_nickname: (getBloggers().find(b => b.id === n.blogger_id) || {}).nickname || '未知'
+      }));
+    },
 
-    // Screenshot
-    uploadScreenshot: (bloggerId, imageBase64) => req('POST', '/api/note/uploadScreenshot', { bloggerId, imageBase64 }),
+    // Analysis (backend proxy)
+    runAnalysis: async (noteIds) => {
+      return backendReq('POST', '/api/analysis/run', { noteIds: noteIds || [] });
+    },
+    getAnalysis: async (date) => {
+      const r = await backendReq('GET', '/api/analysis/get' + (date ? '?date=' + date : ''));
+      return r;
+    },
+    estimateCost: () => backendReq('GET', '/api/analysis/estimateCost'),
 
-    // Push
-    pushToWechat: () => req('POST', '/api/push/send'),
+    // Push (backend proxy)
+    pushToWechat: () => backendReq('POST', '/api/push/send'),
 
     // Pipeline
-    pipelineStatus: () => req('GET', '/api/pipeline/status'),
-    pipelineRun: () => req('POST', '/api/pipeline/run'),
-    pipelineFetch: () => req('POST', '/api/pipeline/fetch'),
+    pipelineStatus: () => backendReq('GET', '/api/pipeline/status'),
+    pipelineRun: () => backendReq('POST', '/api/pipeline/run'),
+    pipelineFetch: () => backendReq('POST', '/api/pipeline/fetch'),
 
-    // Settings
-    getSetting: (key) => req('GET', '/api/setting/' + key).then(r => r.value),
-    setSetting: (key, value) => req('PUT', '/api/setting/' + key, { value }),
-    getAllSettings: () => req('GET', '/api/settings/all'),
+    // Screenshot
+    uploadScreenshot: (bloggerId, imageBase64) => backendReq('POST', '/api/note/uploadScreenshot', { bloggerId, imageBase64 }),
+
+    // Settings (localStorage)
+    getSetting: (key) => {
+      const s = getSettings();
+      return s[key] || '';
+    },
+    setSetting: (key, value) => {
+      const s = getSettings();
+      s[key] = String(value);
+      save('settings', s);
+      return { success: true };
+    },
+    getAllSettings: () => getSettings(),
   };
 })();
