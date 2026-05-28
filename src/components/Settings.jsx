@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useToast } from './Toast';
 
 export default function Settings() {
   const [settings, setSettings] = useState({});
-  const [saving, setSaving] = useState({});
-  const { toast } = useToast();
 
   useEffect(() => {
     if (!window.api) return;
@@ -20,11 +17,9 @@ export default function Settings() {
     setSaving((prev) => ({ ...prev, [key]: true }));
     try {
       await window.api.setSetting(key, String(value));
-      toast('保存成功', 'success');
+      console.log('保存成功:', key);
     } catch {
-      toast('保存失败', 'error');
-    } finally {
-      setSaving((prev) => ({ ...prev, [key]: false }));
+      console.log('保存失败:', key);
     }
   };
 
