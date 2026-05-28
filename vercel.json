@@ -1,6 +1,3 @@
 {
-  "buildCommand": "echo ok",
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index" }
-  ]
+  "buildCommand": "npm install"
 }
