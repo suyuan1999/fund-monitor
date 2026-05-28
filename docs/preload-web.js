@@ -64,7 +64,8 @@
       if (r.success) {
         var bs = B();
         if (!Array.isArray(bs)) bs = [];
-        bs.push({ id: Date.now(), nickname: r.nickname, xhs_url: url, tags: '[]', note_count: 0, created_at: new Date().toISOString() });
+        var blogger = r.blogger || {};
+        bs.push({ id: Date.now(), nickname: blogger.nickname || r.nickname || '未知博主', xhs_url: url, tags: '[]', note_count: 0, created_at: new Date().toISOString() });
         save('bloggers', bs);
       }
       return r;
