@@ -92,11 +92,7 @@ export default function DailyReport() {
     if (ids.length === 0) { toast('请至少选择一条内容', 'error'); return; }
     setAnalyzing(true);
     try {
-      const result = await fetch('/api/analysis/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noteIds: ids }),
-      }).then((r) => r.json());
+      const result = await window.api.runAnalysis(ids);
       if (result.success) { setAnalysis(result.summary); toast('分析完成！', 'success'); }
       else toast(result.error || '分析失败', 'error');
     } catch (_) { toast('分析出错', 'error'); }
