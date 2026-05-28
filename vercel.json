@@ -1,4 +1,3 @@
 {
-  "buildCommand": "npx webpack --mode production && mkdir -p public && cp dist/bundle.js public/ && cp src/index.html public/ && cp src/preload-web.js public/",
   "outputDirectory": "public"
 }
